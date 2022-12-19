@@ -9,6 +9,7 @@ from deepspeech_pytorch.decoder import Decoder, GreedyDecoder
 
 import Levenshtein as Lev
 
+import time
 
 class ErrorRate(Metric, ABC):
     def __init__(self,
@@ -138,8 +139,12 @@ def run_evaluation(test_loader,
                    decoder: Decoder,
                    device: torch.device,
                    target_decoder: Decoder,
-                   precision: int):
+                   precision: int, cfg, p=None):
     model.eval()
+    # NHWC
+    if cfg.channels_last:
+        model = model.to(memory_format=torch.channels_last)
+        print("---- Use NHWC model and input")
     wer = WordErrorRate(
         decoder=decoder,
         target_decoder=target_decoder
@@ -148,13 +153,28 @@ def run_evaluation(test_loader,
         decoder=decoder,
         target_decoder=target_decoder
     )
+    total_time = 0.0
+    total_sample = 0
     for i, (batch) in tqdm(enumerate(test_loader), total=len(test_loader)):
+        if cfg.num_iter > 0 and i > cfg.num_iter: break
         inputs, targets, input_percentages, target_sizes = batch
         input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
+        if cfg.channels_last:
+            inputs = inputs.contiguous(memory_format=torch.channels_last)
+
+        elapsed = time.time()
         inputs = inputs.to(device)
-        with autocast(enabled=precision == 16):
-            out, output_sizes, hs = model(inputs, input_sizes)
+        out, output_sizes, hs = model(inputs, input_sizes)
         decoded_output, _ = decoder.decode(out, output_sizes)
+        if torch.cuda.is_available(): torch.cuda.synchronize()
+        elapsed = time.time() - elapsed
+        if cfg.profile:
+            p.step()
+        print("Iteration: {}, inference time: {} sec.".format(i, elapsed), flush=True)
+        if i >= cfg.num_warmup:
+            total_time += elapsed
+            total_sample += cfg.batch_size
+
         wer.update(
             preds=out,
             preds_sizes=output_sizes,
@@ -167,4 +187,10 @@ def run_evaluation(test_loader,
             targets=targets,
             target_sizes=target_sizes
         )
+
+    throughput = total_sample / total_time
+    latency = total_time / total_sample * 1000
+    print('inference latency: %.3f ms' % latency)
+    print('inference Throughput: %f images/s' % throughput)
+
     return wer.compute(), cer.compute()

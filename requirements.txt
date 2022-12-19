@@ -11,8 +11,8 @@ pytorch-lightning>=1.7.0
 scipy
 sklearn
 sox
-torch
-torchaudio
+# torch
+# torchaudio
 torchelastic
 tqdm
 wget

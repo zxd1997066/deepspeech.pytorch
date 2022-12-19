@@ -43,6 +43,16 @@ class EvalConfig(InferenceConfig):
     save_output: str = ''  # Saves output of model from test to this file_path
     batch_size: int = 20  # Batch size for testing
     num_workers: int = 4
+    # for oob
+    device: str = 'cpu'
+    precision: str = 'float32'
+    channels_last: int = 1
+    num_iter: int = 0
+    num_warmup: int = 0
+    profile: bool = False
+    quantized_engine: str = ''
+    ipex: bool = False
+    jit: bool = False
 
 
 @dataclass
