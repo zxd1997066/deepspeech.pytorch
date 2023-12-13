@@ -21,8 +21,12 @@ def hydra_main(cfg: EvalConfig):
             evaluate(cfg=cfg)
     elif cfg.precision == "float16":
         print('---- Enable AMP float16')
-        with torch.cpu.amp.autocast(enabled=True, dtype=torch.half):
-            evaluate(cfg=cfg)
+        if not torch.cuda.is_available():
+            with torch.cpu.amp.autocast(enabled=True, dtype=torch.half):
+                evaluate(cfg=cfg)
+        elif torch.cuda.is_available():
+            with torch.cuda.amp.autocast(enabled=True, dtype=torch.half):
+                evaluate(cfg=cfg)
     else:
         evaluate(cfg=cfg)
 
